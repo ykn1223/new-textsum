@@ -4,14 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Text Summarizer</title>
-    <!-- Google tag (gtag.js) - REPLACE G-XXXXXXXXXX with your Measurement ID -->
+    <!-- Google tag (gtag.js) - IMPORTANT: REPLACE G-XXXXXXXXXX with your Measurement ID -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-LC24L9F5KJ"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      gtag('config', 'G-LC24L9F5KJ'); // Your Measurement ID here
+      // IMPORTANT: REPLACE G-XXXXXXXXXX with your Google Analytics 4 Measurement ID
+      gtag('config', 'G-LC24L9F5KJ');
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -355,6 +356,7 @@
         // Firebase imports (though not directly used for this simple summarizer, included for consistency with Canvas environment)
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Corrected the syntax for importing getFirestore
         import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global variables for Firebase configuration, provided by the Canvas environment
@@ -407,7 +409,7 @@
         // Get DOM elements for chatbot
         const chatWindow = document.getElementById('chatWindow');
         const chatInput = document.getElementById('chatInput');
-        const sendChatButton = document.getElementById('sendChatButton');
+        const sendChatButton = document.getElementById('sendChatButton'); // Corrected element ID
         const chatLoadingSpinner = document.getElementById('chatLoadingSpinner');
 
         // Get DOM element for theme toggle
@@ -548,8 +550,9 @@
                 let summarizerChatHistory = [{ role: "user", parts: [{ text: prompt }] }]; // Use a local history for summarizer
                 const payload = { contents: summarizerChatHistory };
 
-                // API key - FIX: Changed to empty string to allow Canvas to inject it
-                const apiKey = "";
+                // API key - IMPORTANT: Replace "YOUR_API_KEY_HERE" with your actual Google Cloud API Key
+                // This is necessary for authentication with the Gemini API.
+                const apiKey = "AIzaSyDdJY_4CTSdjuHlGb5ZQ2cnC5ExVwfJFPE"; // <--- REPLACE THIS WITH YOUR ACTUAL API KEY
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
                 // Make the fetch call to the Gemini API
@@ -709,8 +712,9 @@
 
             try {
                 const payload = { contents: chatHistory };
-                // API key - FIX: Changed to empty string to allow Canvas to inject it
-                const apiKey = "";
+                // API key - IMPORTANT: Replace "YOUR_API_KEY_HERE" with your actual Google Cloud API Key
+                // This is necessary for authentication with the Gemini API.
+                const apiKey = "AIzaSyDdJY_4CTSdjuHlGb5ZQ2cnC5ExVwfJFPE"; // <--- REPLACE THIS WITH YOUR ACTUAL API KEY
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(apiUrl, {

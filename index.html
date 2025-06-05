@@ -1,16 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-LC24L9F5KJ"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-LC24L9F5KJ');
-</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Text Summarizer</title>
+    <!-- Google tag (gtag.js) - REPLACE G-XXXXXXXXXX with your Measurement ID -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-LC24L9F5KJ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-LC24L9F5KJ'); // Your Measurement ID here
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom CSS Variables for Theming */
@@ -414,6 +416,14 @@
         // Chatbot history for conversational context
         let chatHistory = [{ role: "model", parts: [{ text: "Hello! I'm Hope, your AI assistant. How can I help you today?" }] }];
 
+        // Helper function to count words
+        function countWords(text) {
+            return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+        }
+
+        // New counter for chat turns
+        let chatTurnCounter = 0;
+
         // Function to display messages (error/success)
         function displayMessage(message, type = 'info') {
             // Hide previous messages with fade-out effect if visible
@@ -484,10 +494,23 @@
         // Summarize button click handler
         summarizeButton.addEventListener('click', async () => {
             const textToSummarize = inputText.value.trim();
+            const inputCharCount = textToSummarize.length;
+            const inputWordCount = countWords(textToSummarize);
 
             // Input validation
-            if (textToSummarize.length < 50) {
+            if (inputCharCount < 50) {
                 displayMessage('Please enter at least 50 characters for a meaningful summary.', 'error');
+                // Send GA4 event for input validation error
+                if (typeof gtag === 'function') {
+                    gtag('event', 'summarize_failure', {
+                        'event_category': 'Summarization',
+                        'event_label': 'Input Validation Error',
+                        'error_type': 'input_too_short', // New dimension
+                        'error_message': 'Input text too short',
+                        'summarize_success': 0
+                    });
+                    console.log('GA4 event sent: summarize_failure - Input Too Short');
+                }
                 return;
             }
 
@@ -510,6 +533,13 @@
             loadingSpinner.classList.remove('hidden');
             summarizeButton.classList.add('opacity-70', 'cursor-not-allowed');
 
+            const startTime = Date.now(); // Start time for performance tracking
+            let summarizeSuccess = 0; // Default to failure
+            let outputCharCount = 0;
+            let outputWordCount = 0;
+            let summarizationRatioPercent = 0;
+            let errorType = 'none'; // Default error type
+
             try {
                 // Construct the prompt for the LLM
                 const prompt = `Please summarize the following text concisely and accurately. Focus on the main points and key information:\n\n${textToSummarize}`;
@@ -518,9 +548,8 @@
                 let summarizerChatHistory = [{ role: "user", parts: [{ text: prompt }] }]; // Use a local history for summarizer
                 const payload = { contents: summarizerChatHistory };
 
-                // API key - REPLACE "YOUR_API_KEY_HERE" WITH YOUR ACTUAL GOOGLE CLOUD API KEY
-                // This is necessary for authentication with the Gemini API.
-                const apiKey = "AIzaSyBKXtaxCdxn2p507yins1aWTDv3sPl_7RQ"; // IMPORTANT: Replace with your actual API key
+                // API key - FIX: Changed to empty string to allow Canvas to inject it
+                const apiKey = "";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
                 // Make the fetch call to the Gemini API
@@ -532,10 +561,13 @@
 
                 if (!response.ok) {
                     const errorData = await response.json();
+                    errorType = `api_error_${response.status}`;
                     throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
                 }
 
                 const result = await response.json();
+                const endTime = Date.now(); // End time for performance tracking
+                const summarizeTimeMs = endTime - startTime; // Calculate time taken
 
                 // Check for valid response structure
                 if (result.candidates && result.candidates.length > 0 &&
@@ -545,13 +577,70 @@
                     summaryText.textContent = summarizedText;
                     summaryOutputContainer.classList.remove('hidden');
                     summaryOutputContainer.classList.add('fade-in-scale'); // Apply fade-in-scale animation
+                    summarizeSuccess = 1; // Mark as success
+                    outputCharCount = summarizedText.length;
+                    outputWordCount = countWords(summarizedText);
+                    summarizationRatioPercent = (inputCharCount > 0) ? ((outputCharCount / inputCharCount) * 100) : 0;
+
+                    // --- Send custom metrics to Google Analytics ---
+                    if (typeof gtag === 'function') { // Check if gtag is loaded
+                        gtag('event', 'summarize_text', {
+                            'char_count': inputCharCount,
+                            'input_word_count': inputWordCount,
+                            'summary_length': outputCharCount,
+                            'output_word_count': outputWordCount,
+                            'summarize_time_ms': summarizeTimeMs,
+                            'summarize_success': summarizeSuccess, // 1 for success
+                            'summarization_ratio_percent': parseFloat(summarizationRatioPercent.toFixed(2)), // New metric
+                            'input_source': 'manual_paste', // New dimension
+                            'event_category': 'Summarization',
+                            'event_label': 'Text Summarized Successfully'
+                        });
+                        console.log('GA4 event sent: summarize_text', {
+                            'char_count': inputCharCount,
+                            'input_word_count': inputWordCount,
+                            'summary_length': outputCharCount,
+                            'output_word_count': outputWordCount,
+                            'summarize_time_ms': summarizeTimeMs,
+                            'summarize_success': summarizeSuccess,
+                            'summarization_ratio_percent': parseFloat(summarizationRatioPercent.toFixed(2)),
+                            'input_source': 'manual_paste'
+                        });
+                    }
+                    // --- End custom metrics sending ---
+
                 } else {
                     displayMessage('Failed to get a summary. The AI might not have generated content.', 'error');
+                    errorType = 'api_no_content';
+                    // Send failure event
+                    if (typeof gtag === 'function') {
+                        gtag('event', 'summarize_failure', {
+                            'event_category': 'Summarization',
+                            'event_label': 'AI No Content Generated',
+                            'error_type': errorType, // New dimension
+                            'error_message': 'AI did not return content',
+                            'summarize_success': 0 // 0 for failure
+                        });
+                        console.log('GA4 event sent: summarize_failure - AI No Content Generated');
+                    }
                 }
 
             } catch (error) {
                 console.error("Error summarizing text:", error);
                 displayMessage(`An unexpected error occurred: ${error.message}. Please try again.`, 'error');
+                // errorType is set in the if (!response.ok) block, otherwise it's a generic client_error
+                if (errorType === 'none') errorType = 'client_error';
+                // Send failure event with error details
+                if (typeof gtag === 'function') {
+                    gtag('event', 'summarize_failure', {
+                        'event_category': 'Summarization',
+                        'event_label': 'API Error',
+                        'error_type': errorType, // New dimension
+                        'error_message': error.message,
+                        'summarize_success': 0 // 0 for failure
+                    });
+                    console.log('GA4 event sent: summarize_failure - API Error:', error.message);
+                }
             } finally {
                 // Reset loading state
                 summarizeButton.disabled = false;
@@ -576,6 +665,15 @@
                     const successful = document.execCommand('copy');
                     if (successful) {
                         displayMessage('Copied to clipboard!', 'copy-success');
+                        // --- Send GA4 event for copy action ---
+                        if (typeof gtag === 'function') {
+                            gtag('event', 'copy_summary', {
+                                'event_category': 'Summarization',
+                                'event_label': 'Summary Copied'
+                            });
+                            console.log('GA4 event sent: copy_summary');
+                        }
+                        // --- End GA4 event for copy action ---
                     } else {
                         displayMessage('Failed to copy text. Please try again manually.', 'error');
                     }
@@ -595,6 +693,7 @@
             const userMessage = chatInput.value.trim();
             if (userMessage === '') return;
 
+            chatTurnCounter++; // Increment chat turn counter for each user message
             addChatMessage(userMessage, 'user');
             chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
             chatInput.value = ''; // Clear input field
@@ -605,11 +704,13 @@
             chatLoadingSpinner.classList.remove('hidden');
             sendChatButton.classList.add('opacity-70', 'cursor-not-allowed');
 
+            const chatStartTime = Date.now(); // Start time for chat response tracking
+            let errorType = 'none'; // Default error type
+
             try {
                 const payload = { contents: chatHistory };
-                // API key - REPLACE "YOUR_API_KEY_HERE" WITH YOUR ACTUAL GOOGLE CLOUD API KEY
-                // This is necessary for authentication with the Gemini API.
-                const apiKey = "AIzaSyBKXtaxCdxn2p507yins1aWTDv3sPl_7RQ"; // IMPORTANT: Replace with your actual API key
+                // API key - FIX: Changed to empty string to allow Canvas to inject it
+                const apiKey = "";
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(apiUrl, {
@@ -620,10 +721,13 @@
 
                 if (!response.ok) {
                     const errorData = await response.json();
+                    errorType = `api_error_${response.status}`;
                     throw new Error(`Chat API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
                 }
 
                 const result = await response.json();
+                const chatEndTime = Date.now(); // End time for chat response tracking
+                const chatResponseTimeMs = chatEndTime - chatStartTime; // Calculate chat response time
 
                 if (result.candidates && result.candidates.length > 0 &&
                     result.candidates[0].content && result.candidates[0].content.parts &&
@@ -631,13 +735,53 @@
                     const hopeResponse = result.candidates[0].content.parts[0].text;
                     addChatMessage(hopeResponse, 'hope');
                     chatHistory.push({ role: "model", parts: [{ text: hopeResponse }] });
+
+                    // --- Send GA4 event for chat message ---
+                    if (typeof gtag === 'function') {
+                        gtag('event', 'chat_message_sent', {
+                            'event_category': 'Chatbot',
+                            'event_label': 'User Message Sent',
+                            'message_length': userMessage.length,
+                            'chat_response_time_ms': chatResponseTimeMs,
+                            'chat_turn_number': chatTurnCounter // New metric
+                        });
+                        console.log('GA4 event sent: chat_message_sent', {
+                            'message_length': userMessage.length,
+                            'chat_response_time_ms': chatResponseTimeMs,
+                            'chat_turn_number': chatTurnCounter
+                        });
+                    }
+                    // --- End GA4 event for chat message ---
+
                 } else {
                     addChatMessage("Sorry, I couldn't generate a response. Please try again.", 'hope');
+                    errorType = 'api_no_chat_content';
+                    // Send chat failure event
+                    if (typeof gtag === 'function') {
+                        gtag('event', 'chat_failure', {
+                            'event_category': 'Chatbot',
+                            'event_label': 'AI No Chat Content',
+                            'error_type': errorType, // New dimension
+                            'error_message': 'AI did not return chat content'
+                        });
+                        console.log('GA4 event sent: chat_failure - AI No Chat Content');
+                    }
                 }
 
             } catch (error) {
                 console.error("Error chatting with Hope:", error);
                 addChatMessage(`Oops! Something went wrong: ${error.message}. Please try again.`, 'hope');
+                if (errorType === 'none') errorType = 'client_chat_error'; // Generic client-side chat error
+                // Send chat failure event with error details
+                if (typeof gtag === 'function') {
+                    gtag('event', 'chat_failure', {
+                        'event_category': 'Chatbot',
+                        'event_label': 'Chat API Error',
+                        'error_type': errorType, // New dimension
+                        'error_message': error.message
+                    });
+                    console.log('GA4 event sent: chat_failure - Chat API Error:', error.message);
+                }
             } finally {
                 // Reset loading state
                 sendChatButton.disabled = false;
@@ -665,6 +809,17 @@
             const currentTheme = localStorage.getItem('theme');
             const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
             applyTheme(newTheme);
+
+            // --- Send GA4 event for theme toggle ---
+            if (typeof gtag === 'function') {
+                gtag('event', 'theme_toggle', {
+                    'event_category': 'User Interface',
+                    'event_label': `Switched to ${newTheme} mode`,
+                    'theme_toggle_count': 1 // This is a count, not a metric, but useful for event counting
+                });
+                console.log('GA4 event sent: theme_toggle - Switched to', newTheme);
+            }
+            // --- End GA4 event for theme toggle ---
         });
 
         // Apply saved theme on load

@@ -5,14 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Text Summarizer</title>
 
-    <!-- Google Tag Manager - IMPORTANT: REPLACE GTM-XXXXXXX with your GTM Container ID -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtag/js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-KCCGQHN5');</script>
-    <!-- End Google Tag Manager -->
-
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom CSS Variables for Theming */
@@ -258,11 +255,8 @@
     </style>
 </head>
 <body>
-    <!-- Google Tag Manager (noscript) - IMPORTANT: REPLACE GTM-XXXXXXX with your GTM Container ID -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KCCGQHN5"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
-    <!-- End Google Tag Manager (noscript) -->
-
     <div id="themeToggle" class="theme-toggle">
         <svg class="sun-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 17.5C14.4853 17.5 16.5 15.4853 16.5 13C16.5 10.5147 14.4853 8.5 12 8.5C9.51472 8.5 7.5 10.5147 7.5 13C7.5 15.4853 9.51472 17.5 12 17.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -599,50 +593,29 @@
                         'summarization_ratio_percent': parseFloat(summarizationRatioPercent.toFixed(2)),
                         'input_source': 'manual_paste',
                         'event_category': 'Summarization', // These are for reporting clarity in GTM/GA4
-                        'event_label': 'Text Summarized Successfully' // These are for reporting clarity in GTM/GA4
+                        'event_label': 'Text Summarized Successfully'
                     });
-                    console.log('DataLayer push: summarize_text', {
-                        'char_count': inputCharCount,
-                        'input_word_count': inputWordCount,
-                        'summary_length': outputCharCount,
-                        'output_word_count': outputWordCount,
-                        'summarize_time_ms': summarizeTimeMs,
-                        'summarize_success': summarizeSuccess,
-                        'summarization_ratio_percent': parseFloat(summarizationRatioPercent.toFixed(2)),
-                        'input_source': 'manual_paste'
-                    });
-                    // --- End DataLayer push ---
+                    console.log('DataLayer push: summarize_text - Success');
 
                 } else {
-                    displayMessage('Failed to get a summary. The AI might not have generated content.', 'error');
-                    errorType = 'api_no_content';
-                    // DataLayer push for failure event
-                    window.dataLayer.push({
-                        'event': 'summarize_failure',
-                        'event_category': 'Summarization',
-                        'event_label': 'AI No Content Generated',
-                        'error_type': errorType,
-                        'error_message': 'AI did not return content',
-                        'summarize_success': 0
-                    });
-                    console.log('DataLayer push: summarize_failure - AI No Content Generated');
+                    errorType = 'empty_response';
+                    throw new Error('No summary returned or unexpected API response structure.');
                 }
-
             } catch (error) {
-                console.error("Error summarizing text:", error);
-                displayMessage(`An unexpected error occurred: ${error.message}. Please try again.`, 'error');
-                // errorType is set in the if (!response.ok) block, otherwise it's a generic client_error
-                if (errorType === 'none') errorType = 'client_error';
-                // DataLayer push for failure event with error details
+                console.error("Summarization error:", error);
+                displayMessage(`Failed to summarize text: ${error.message}. Please try again.`, 'error');
+                // DataLayer push for summarization failure
                 window.dataLayer.push({
                     'event': 'summarize_failure',
                     'event_category': 'Summarization',
                     'event_label': 'API Error',
-                    'error_type': errorType,
+                    'error_type': errorType || 'unknown_api_error',
                     'error_message': error.message,
-                    'summarize_success': 0
+                    'summarize_success': 0, // 0 for failure
+                    'char_count': inputCharCount, // Still send input details
+                    'input_word_count': inputWordCount
                 });
-                console.log('DataLayer push: summarize_failure - API Error:', error.message);
+                console.log('DataLayer push: summarize_failure - API Error');
             } finally {
                 // Reset loading state
                 summarizeButton.disabled = false;
@@ -652,66 +625,62 @@
             }
         });
 
-        // Copy to clipboard functionality
+        // Copy button click handler
         copyButton.addEventListener('click', () => {
             const textToCopy = summaryText.textContent;
             if (textToCopy) {
-                // Using document.execCommand('copy') for better compatibility in iframes
-                const textarea = document.createElement('textarea');
-                textarea.value = textToCopy;
-                textarea.style.position = 'fixed'; // Avoid scrolling to bottom
-                textarea.style.left = '-9999px'; // Hide from view
-                document.body.appendChild(textarea);
-                textarea.select();
-                try {
-                    const successful = document.execCommand('copy');
-                    if (successful) {
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
                         displayMessage('Copied to clipboard!', 'copy-success');
-                        // --- DataLayer push for copy action ---
+                        // DataLayer push for copy action
                         window.dataLayer.push({
-                            'event': 'copy_summary',
-                            'event_category': 'Summarization',
-                            'event_label': 'Summary Copied'
+                            'event': 'summary_copied',
+                            'event_category': 'Engagement',
+                            'event_label': 'Summary Text Copied',
+                            'summary_length': textToCopy.length
                         });
-                        console.log('DataLayer push: copy_summary');
-                        // --- End DataLayer push ---
-                    } else {
-                        displayMessage('Failed to copy text. Please try again manually.', 'error');
-                    }
-                } catch (err) {
-                    console.error('Failed to copy text:', err);
-                    displayMessage('Failed to copy text. Your browser might not support this feature.', 'error');
-                } finally {
-                    document.body.removeChild(textarea);
-                }
-            } else {
-                displayMessage('No summary to copy.', 'error');
+                        console.log('DataLayer push: summary_copied');
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy text: ', err);
+                        displayMessage('Failed to copy text. Please try manually.', 'error');
+                    });
             }
         });
 
-        // Chatbot send message handler
-        async function sendChatMessage() {
+        // Chatbot functionality
+        sendChatButton.addEventListener('click', async () => {
             const userMessage = chatInput.value.trim();
             if (userMessage === '') return;
 
-            chatTurnCounter++; // Increment chat turn counter for each user message
             addChatMessage(userMessage, 'user');
-            chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
-            chatInput.value = ''; // Clear input field
+            chatInput.value = '';
+            chatTurnCounter++; // Increment chat turn counter
 
-            // Show loading state
+            // DataLayer push for chat send
+            window.dataLayer.push({
+                'event': 'chat_message_sent',
+                'event_category': 'Chatbot',
+                'event_label': 'User Message Sent',
+                'chat_turn_number': chatTurnCounter,
+                'message_length': userMessage.length
+            });
+            console.log('DataLayer push: chat_message_sent');
+
+            // Add user message to chat history
+            chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
+
+            // Show loading state for chat
             sendChatButton.disabled = true;
-            sendChatButton.textContent = ''; // Clear text
             chatLoadingSpinner.classList.remove('hidden');
             sendChatButton.classList.add('opacity-70', 'cursor-not-allowed');
 
-            const chatStartTime = Date.now(); // Start time for chat response tracking
-            let errorType = 'none'; // Default error type
+            const startTime = Date.now(); // Start time for chat response
+            let chatSuccess = 0;
+            let errorType = 'none';
 
             try {
                 const payload = { contents: chatHistory };
-                // API key - IMPORTANT: Replace "AIzaSyDdJY_4CTSdjuHlGb5ZQ2cnC5ExVwfJFPE" with your actual Google Cloud API Key
-                // This is necessary for authentication with the Gemini API.
                 const apiKey = "AIzaSyDdJY_4CTSdjuHlGb5ZQ2cnC5ExVwfJFPE"; // <--- REPLACE THIS WITH YOUR ACTUAL API KEY
                 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
@@ -724,105 +693,98 @@
                 if (!response.ok) {
                     const errorData = await response.json();
                     errorType = `api_error_${response.status}`;
-                    throw new Error(`Chat API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+                    throw new Error(`API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
                 }
 
                 const result = await response.json();
-                const chatEndTime = Date.now(); // End time for chat response tracking
-                const chatResponseTimeMs = chatEndTime - chatStartTime; // Calculate chat response time
+                const endTime = Date.now(); // End time for chat response
+                const chatResponseTimeMs = endTime - startTime;
 
                 if (result.candidates && result.candidates.length > 0 &&
                     result.candidates[0].content && result.candidates[0].content.parts &&
                     result.candidates[0].content.parts.length > 0) {
                     const hopeResponse = result.candidates[0].content.parts[0].text;
                     addChatMessage(hopeResponse, 'hope');
-                    chatHistory.push({ role: "model", parts: [{ text: hopeResponse }] });
+                    chatHistory.push({ role: "model", parts: [{ text: hopeResponse }] }); // Add Hope's response to history
+                    chatSuccess = 1;
 
-                    // --- DataLayer push for chat message ---
+                    // DataLayer push for chat response received
                     window.dataLayer.push({
-                        'event': 'chat_message_sent',
+                        'event': 'chat_message_received',
                         'event_category': 'Chatbot',
-                        'event_label': 'User Message Sent',
-                        'message_length': userMessage.length,
-                        'chat_response_time_ms': chatResponseTimeMs,
-                        'chat_turn_number': chatTurnCounter
+                        'event_label': 'Hope Message Received',
+                        'chat_turn_number': chatTurnCounter,
+                        'response_length': hopeResponse.length,
+                        'response_time_ms': chatResponseTimeMs,
+                        'chat_success': chatSuccess
                     });
-                    console.log('DataLayer push: chat_message_sent', {
-                        'message_length': userMessage.length,
-                        'chat_response_time_ms': chatResponseTimeMs,
-                        'chat_turn_number': chatTurnCounter
-                    });
-                    // --- End DataLayer push ---
-
+                    console.log('DataLayer push: chat_message_received - Success');
                 } else {
-                    addChatMessage("Sorry, I couldn't generate a response. Please try again.", 'hope');
-                    errorType = 'api_no_chat_content';
-                    // DataLayer push for chat failure event
-                    window.dataLayer.push({
-                        'event': 'chat_failure',
-                        'event_category': 'Chatbot',
-                        'event_label': 'AI No Chat Content',
-                        'error_type': errorType,
-                        'error_message': 'AI did not return chat content'
-                    });
-                    console.log('DataLayer push: chat_failure - AI No Chat Content');
+                    errorType = 'empty_response';
+                    throw new Error('No response from Hope or unexpected API response structure.');
                 }
-
             } catch (error) {
-                console.error("Error chatting with Hope:", error);
-                addChatMessage(`Oops! Something went wrong: ${error.message}. Please try again.`, 'hope');
-                if (errorType === 'none') errorType = 'client_chat_error';
-                // DataLayer push for chat failure event with error details
+                console.error("Chatbot error:", error);
+                addChatMessage("Sorry, I'm having trouble responding right now. Please try again later.", 'hope');
+                // DataLayer push for chat failure
                 window.dataLayer.push({
-                    'event': 'chat_failure',
+                    'event': 'chat_message_failed',
                     'event_category': 'Chatbot',
-                    'event_label': 'Chat API Error',
-                    'error_type': errorType,
-                    'error_message': error.message
+                    'event_label': 'Hope Message Failed',
+                    'chat_turn_number': chatTurnCounter,
+                    'error_type': errorType || 'unknown_error',
+                    'error_message': error.message,
+                    'chat_success': 0
                 });
-                console.log('DataLayer push: chat_failure - Chat API Error:', error.message);
+                console.log('DataLayer push: chat_message_failed - Error');
             } finally {
-                // Reset loading state
+                // Reset loading state for chat
                 sendChatButton.disabled = false;
-                sendChatButton.textContent = 'Send';
                 chatLoadingSpinner.classList.add('hidden');
                 sendChatButton.classList.remove('opacity-70', 'cursor-not-allowed');
             }
-        }
-
-        // Event listeners for chatbot
-        sendChatButton.addEventListener('click', sendChatMessage);
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendChatMessage();
-            }
         });
 
-        // Theme Toggle Logic
-        function applyTheme(theme) {
-            document.body.classList.toggle('dark-mode', theme === 'dark');
-            localStorage.setItem('theme', theme);
-        }
-
+        // Theme Toggle
         themeToggle.addEventListener('click', () => {
-            const currentTheme = localStorage.getItem('theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            applyTheme(newTheme);
+            document.body.classList.toggle('dark-mode');
+            const isDarkMode = document.body.classList.contains('dark-mode');
+            localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
 
-            // --- DataLayer push for theme toggle ---
+            // DataLayer push for theme toggle
             window.dataLayer.push({
                 'event': 'theme_toggle',
                 'event_category': 'User Interface',
-                'event_label': `Switched to ${newTheme} mode`,
-                'theme_toggle_count': 1
+                'event_label': `Theme Switched to ${isDarkMode ? 'Dark' : 'Light'}`,
+                'theme_mode': isDarkMode ? 'dark' : 'light'
             });
-            console.log('DataLayer push: theme_toggle - Switched to', newTheme);
-            // --- End DataLayer push ---
+            console.log('DataLayer push: theme_toggle');
         });
 
         // Apply saved theme on load
-        const savedTheme = localStorage.getItem('theme') || 'light'; // Default to light
-        applyTheme(savedTheme);
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+            }
+        });
+
+        // Add a global error handler to catch unhandled JavaScript errors
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error("Global JS Error:", message, source, lineno, colno, error);
+            window.dataLayer.push({
+                'event': 'js_error',
+                'event_category': 'Errors',
+                'event_label': `JS Error: ${message}`,
+                'error_message': message,
+                'error_source': source,
+                'error_lineno': lineno,
+                'error_colno': colno,
+                'error_stack': error ? error.stack : 'N/A'
+            });
+            console.log('DataLayer push: js_error');
+            return false; // Prevents the default browser error handling
+        };
     </script>
 </body>
 </html>
